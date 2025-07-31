@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>ServiceDZ - Plateforme</title>
+<style>
+body{font-family:Arial;background:#f2f2f2;margin:0;}
+header{background:#007bff;color:white;text-align:center;padding:15px;font-size:24px;}
+.container{padding:15px;}
+button{background:#007bff;color:white;border:none;padding:10px;margin:5px;cursor:pointer;border-radius:5px;}
+button:hover{background:#0056b3;}
+input,textarea{width:100%;padding:10px;margin:5px 0;border:1px solid #ccc;border-radius:5px;}
+.card{background:white;padding:10px;margin:10px 0;border-radius:5px;box-shadow:0 0 5px #aaa;}
+.price{color:green;font-weight:bold;}
+.search{width:100%;padding:10px;margin-bottom:10px;border-radius:5px;border:1px solid #ccc;}
+</style>
+</head>
+<body>
+
+<header>💼 ServiceDZ</header>
+
+<div class="container" id="roleSelect">
+  <h3>Choisissez votre rôle :</h3>
+  <button onclick="setRole('seller')">👤 Prestataire</button>
+  <button onclick="setRole('client')">🛒 Client</button>
+</div>
+
+<!-- Panneau Prestataire -->
+<div class="container" id="sellerPanel" style="display:none;">
+  <h3>Ajouter un service</h3>
+  <input id="serviceName" placeholder="Nom du service">
+  <textarea id="serviceDesc" placeholder="Description"></textarea>
+  <input id="servicePrice" placeholder="Prix (USD)">
+  <button onclick="addService()">Ajouter</button>
+  <hr>
+  <h3>Mes Services</h3>
+  <div id="myServices"></div>
+</div>
+
+<!-- Panneau Client -->
+<div class="container" id="clientPanel" style="display:none;">
+  <input type="text" id="searchBox" class="search" placeholder="🔍 Rechercher un service..." onkeyup="searchServices()">
+  <div id="allServices"></div>
+</div>
+
+<script>
+// === Stockage Local ===
+let services = JSON.parse(localStorage.getItem("services") || "[]");
+
+// === Sélection du rôle ===
+function setRole(role){
+    document.getElementById("roleSelect").style.display="none";
+    if(role==='seller'){document.getElementById("sellerPanel").style.display="block";loadMyServices();}
+    else{document.getElementById("clientPanel").style.display="block";loadAllServices();}
+}
+
+// === Ajouter un service ===
+function addService(){
+    const name=document.getElementById("serviceName").value;
+    const desc=document.getElementById("serviceDesc").value;
+    const price=document.getElementById("servicePrice").value;
+    if(name && price){
+        services.push({name,desc,price});
+        localStorage.setItem("services",JSON.stringify(services));
+        alert("✅ Service ajouté !");
+        loadMyServices();
+    } else alert("⚠️ Remplissez tous les champs");
+}
+
+// === Charger les services du prestataire ===
+function loadMyServices(){
+    const div=document.getElementById("myServices");
+    div.innerHTML="";
+    services.forEach((s,i)=>{
+        div.innerHTML+=`<div class='card'><b>${s.name}</b><br>${s.desc}<br>
+        <span class='price'>${s.price} USD</span><br>
+        <button onclick="deleteService(${i})">🗑️ Supprimer</button></div>`;
+    });
+}
+
+// === Supprimer un service ===
+function deleteService(i){
+    services.splice(i,1);
+    localStorage.setItem("services",JSON.stringify(services));
+    loadMyServices();
+}
+
+// === Afficher tous les services ===
+function loadAllServices(){
+    const div=document.getElementById("allServices");
+    div.innerHTML="";
+    services.forEach((s)=>{
+        div.innerHTML+=`<div class='card'><b>${s.name}</b><br>${s.desc}<br>
+        <span class='price'>${s.price} USD</span><br>
+        <button onclick="buyPayPal('${s.price}')">💳 Payer PayPal</button>
+        <button onclick="buyEdahabia('${s.price}')">💳 Carte EDAHABIA</button></div>`;
+    });
+}
+
+// === Recherche ===
+function searchServices(){
+    const q=document.getElementById("searchBox").value.toLowerCase();
+    const div=document.getElementById("allServices");
+    div.innerHTML="";
+    services.filter(s=>s.name.toLowerCase().includes(q)).forEach((s)=>{
+        div.innerHTML+=`<div class='card'><b>${s.name}</b><br>${s.desc}<br>
+        <span class='price'>${s.price} USD</span><br>
+        <button onclick="buyPayPal('${s.price}')">💳 Payer PayPal</button>
+        <button onclick="buyEdahabia('${s.price}')">💳 Carte EDAHABIA</button></div>`;
+    });
+}
+
+// === Paiement PayPal ===
+function buyPayPal(price){
+    window.open(`https://www.paypal.com/paypalme/yourpaypal/${price}`,"_blank");
+}
+
+// === Paiement Carte Or (EDAHABIA) ===
+function buyEdahabia(price){
+    alert("💡 Vous serez redirigé vers la plateforme de paiement EDAHABIA.");
+    window.open(`https://baridinet.poste.dz`, "_blank");
+}
+</script>
+
+</body>
+    </html>
