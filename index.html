@@ -1,126 +1,217 @@
-<!DOCTYPE html>
-<html lang="fr">
+<!DOCTYPE html><html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>ServiceDZ - Plateforme</title>
-<style>
-body{font-family:Arial;background:#f2f2f2;margin:0;}
-header{background:#007bff;color:white;text-align:center;padding:15px;font-size:24px;}
-.container{padding:15px;}
-button{background:#007bff;color:white;border:none;padding:10px;margin:5px;cursor:pointer;border-radius:5px;}
-button:hover{background:#0056b3;}
-input,textarea{width:100%;padding:10px;margin:5px 0;border:1px solid #ccc;border-radius:5px;}
-.card{background:white;padding:10px;margin:10px 0;border-radius:5px;box-shadow:0 0 5px #aaa;}
-.price{color:green;font-weight:bold;}
-.search{width:100%;padding:10px;margin-bottom:10px;border-radius:5px;border:1px solid #ccc;}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brilex App</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f4f4f4;
+      color: #333;
+    }
+    nav {
+      display: flex;
+      justify-content: space-around;
+      background: #007BFF;
+      padding: 10px;
+    }
+    nav button {
+      flex: 1;
+      padding: 12px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      font-size: 16px;
+    }
+    nav button.active {
+      background: #0056b3;
+    }
+    section {
+      display: none;
+      padding: 15px;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 16px;
+    }
+    .input-group {
+      display: flex;
+      gap: 10px;
+    }
+    .input-group input {
+      flex: 1;
+    }
+    .invoice {
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: white;
+    }
+    .invoice-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    #qr-reader {
+      width: 100%;
+      max-width: 400px;
+      margin: 10px auto;
+    }
+    @media screen and (max-width: 600px) {
+      nav button { font-size: 14px; padding: 8px; }
+    }
+  </style>
 </head>
 <body>
+  <nav>
+    <button class="active" onclick="showSection(event,'produits')">Produits</button>
+    <button onclick="showSection(event,'facture')">Facturation</button>
+    <button onclick="showSection(event,'analyse')">Analyse</button>
+  </nav>  <section id="produits" style="display:block">
+    <h2>Ajouter un produit</h2>
+    <div class="input-group">
+      <input type="text" placeholder="Scanner le code-barres" id="barcode" />
+      <button onclick="scanCode('barcode')">📷</button>
+    </div>
+    <input type="text" placeholder="Nom du produit" id="nomProduit" />
+    <input type="text" placeholder="Couleur" id="couleurProduit" />
+    <input type="number" placeholder="Prix" id="prixProduit" />
+    <button onclick="ajouterProduit()">Ajouter</button>
+    <div id="listeProduits"></div>
+  </section>  <section id="facture">
+    <h2>Nouvelle Facture</h2>
+    <input type="text" placeholder="Nom du client" id="clientNom" />
+    <input type="text" placeholder="Adresse ou emplacement" id="clientAdresse" />
+    <div class="input-group">
+      <input type="text" placeholder="Code-barres produit" id="factureBarcode" />
+      <button onclick="scanCode('factureBarcode')">📷</button>
+    </div>
+    <button onclick="ajouterALaFacture()">Ajouter produit</button>
+    <div class="invoice" id="factureDetail"></div>
+    <label for="paiementSelect">État de paiement</label>
+    <select id="paiementSelect">
+      <option value="payee">Payée</option>
+      <option value="dette">Dette</option>
+    </select>
+    <button onclick="imprimerFacture()">Imprimer Facture</button>
+  </section>  <section id="analyse">
+    <h2>Analyse des ventes</h2>
+    <div id="salesSummary"></div>
+  </section>  <div id="qr-reader" style="display:none"></div>  <script>
+    let produits = JSON.parse(localStorage.getItem("produits") || "[]");
+    let factureItems = [];
 
-<header>💼 ServiceDZ</header>
+    function showSection(e, id) {
+      document.querySelectorAll("section").forEach(s => s.style.display = "none");
+      document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+      document.getElementById(id).style.display = "block";
+      e.target.classList.add("active");
+      if (id === 'produits') renderProducts();
+      if (id === 'analyse') renderSales();
+      document.getElementById("qr-reader").style.display = "none";
+    }
 
-<div class="container" id="roleSelect">
-  <h3>Choisissez votre rôle :</h3>
-  <button onclick="setRole('seller')">👤 Prestataire</button>
-  <button onclick="setRole('client')">🛒 Client</button>
-</div>
+    function ajouterProduit() {
+      const p = {
+        code: document.getElementById("barcode").value,
+        nom: document.getElementById("nomProduit").value,
+        couleur: document.getElementById("couleurProduit").value,
+        prix: parseFloat(document.getElementById("prixProduit").value)
+      };
+      produits.push(p);
+      localStorage.setItem("produits", JSON.stringify(produits));
+      renderProducts();
+    }
 
-<!-- Panneau Prestataire -->
-<div class="container" id="sellerPanel" style="display:none;">
-  <h3>Ajouter un service</h3>
-  <input id="serviceName" placeholder="Nom du service">
-  <textarea id="serviceDesc" placeholder="Description"></textarea>
-  <input id="servicePrice" placeholder="Prix (USD)">
-  <button onclick="addService()">Ajouter</button>
-  <hr>
-  <h3>Mes Services</h3>
-  <div id="myServices"></div>
-</div>
+    function renderProducts() {
+      const container = document.getElementById("listeProduits");
+      container.innerHTML = produits.map(p => `<div>${p.code} - ${p.nom} (${p.couleur}) - ${p.prix} DA</div>`).join("");
+    }
 
-<!-- Panneau Client -->
-<div class="container" id="clientPanel" style="display:none;">
-  <input type="text" id="searchBox" class="search" placeholder="🔍 Rechercher un service..." onkeyup="searchServices()">
-  <div id="allServices"></div>
-</div>
+    function ajouterALaFacture() {
+      const code = document.getElementById("factureBarcode").value;
+      const produit = produits.find(p => p.code === code);
+      if (produit) {
+        factureItems.push(produit);
+        renderFacture();
+      } else {
+        alert("Produit introuvable !");
+      }
+    }
 
-<script>
-// === Stockage Local ===
-let services = JSON.parse(localStorage.getItem("services") || "[]");
+    function renderFacture() {
+      const container = document.getElementById("factureDetail");
+      let total = 0;
+      container.innerHTML = factureItems.map(p => {
+        total += p.prix;
+        return `<div class='invoice-item'><span>${p.nom}</span><span>${p.prix} DA</span></div>`;
+      }).join("");
+      container.innerHTML += `<hr><strong>Total: ${total} DA</strong>`;
+    }
 
-// === Sélection du rôle ===
-function setRole(role){
-    document.getElementById("roleSelect").style.display="none";
-    if(role==='seller'){document.getElementById("sellerPanel").style.display="block";loadMyServices();}
-    else{document.getElementById("clientPanel").style.display="block";loadAllServices();}
-}
+    function imprimerFacture() {
+      const nom = document.getElementById("clientNom").value;
+      const adresse = document.getElementById("clientAdresse").value;
+      const paiement = document.getElementById("paiementSelect").value;
+      const total = factureItems.reduce((sum, p) => sum + p.prix, 0);
+      const date = new Date().toLocaleDateString();
 
-// === Ajouter un service ===
-function addService(){
-    const name=document.getElementById("serviceName").value;
-    const desc=document.getElementById("serviceDesc").value;
-    const price=document.getElementById("servicePrice").value;
-    if(name && price){
-        services.push({name,desc,price});
-        localStorage.setItem("services",JSON.stringify(services));
-        alert("✅ Service ajouté !");
-        loadMyServices();
-    } else alert("⚠️ Remplissez tous les champs");
-}
+      const vente = {
+        client: nom,
+        adresse,
+        date,
+        total,
+        paiement
+      };
 
-// === Charger les services du prestataire ===
-function loadMyServices(){
-    const div=document.getElementById("myServices");
-    div.innerHTML="";
-    services.forEach((s,i)=>{
-        div.innerHTML+=`<div class='card'><b>${s.name}</b><br>${s.desc}<br>
-        <span class='price'>${s.price} USD</span><br>
-        <button onclick="deleteService(${i})">🗑️ Supprimer</button></div>`;
-    });
-}
+      const ventes = JSON.parse(localStorage.getItem("ventes") || "[]");
+      ventes.push(vente);
+      localStorage.setItem("ventes", JSON.stringify(ventes));
 
-// === Supprimer un service ===
-function deleteService(i){
-    services.splice(i,1);
-    localStorage.setItem("services",JSON.stringify(services));
-    loadMyServices();
-}
+      alert("Facture imprimée / sauvegardée.");
+      factureItems = [];
+      renderFacture();
+    }
 
-// === Afficher tous les services ===
-function loadAllServices(){
-    const div=document.getElementById("allServices");
-    div.innerHTML="";
-    services.forEach((s)=>{
-        div.innerHTML+=`<div class='card'><b>${s.name}</b><br>${s.desc}<br>
-        <span class='price'>${s.price} USD</span><br>
-        <button onclick="buyPayPal('${s.price}')">💳 Payer PayPal</button>
-        <button onclick="buyEdahabia('${s.price}')">💳 Carte EDAHABIA</button></div>`;
-    });
-}
+    function renderSales() {
+      const ventes = JSON.parse(localStorage.getItem("ventes") || "[]");
+      const container = document.getElementById("salesSummary");
+      container.innerHTML = ventes.map(v => `
+        <div style='border-bottom:1px solid #ccc; padding:5px 0;'>
+          <div><strong>${v.client}</strong> - ${v.total} DA (${v.paiement})</div>
+          <small>${v.date} - ${v.adresse}</small>
+        </div>
+      `).join("");
+    }
 
-// === Recherche ===
-function searchServices(){
-    const q=document.getElementById("searchBox").value.toLowerCase();
-    const div=document.getElementById("allServices");
-    div.innerHTML="";
-    services.filter(s=>s.name.toLowerCase().includes(q)).forEach((s)=>{
-        div.innerHTML+=`<div class='card'><b>${s.name}</b><br>${s.desc}<br>
-        <span class='price'>${s.price} USD</span><br>
-        <button onclick="buyPayPal('${s.price}')">💳 Payer PayPal</button>
-        <button onclick="buyEdahabia('${s.price}')">💳 Carte EDAHABIA</button></div>`;
-    });
-}
+    function scanCode(targetInputId) {
+      const qrReader = document.getElementById("qr-reader");
+      qrReader.style.display = "block";
+      const html5QrCode = new Html5Qrcode("qr-reader");
 
-// === Paiement PayPal ===
-function buyPayPal(price){
-    window.open(`https://www.paypal.com/paypalme/yourpaypal/${price}`,"_blank");
-}
-
-// === Paiement Carte Or (EDAHABIA) ===
-function buyEdahabia(price){
-    alert("💡 Vous serez redirigé vers la plateforme de paiement EDAHABIA.");
-    window.open(`https://baridinet.poste.dz`, "_blank");
-}
-</script>
-
-</body>
-    </html>
+      Html5Qrcode.getCameras().then(devices => {
+        if (devices && devices.length) {
+          html5QrCode.start(
+            devices[0].id,
+            {
+              fps: 10,
+              qrbox: 250
+            },
+            qrCodeMessage => {
+              document.getElementById(targetInputId).value = qrCodeMessage;
+              html5QrCode.stop();
+              qrReader.style.display = "none";
+            },
+            errorMessage => {
+              // console.log(errorMessage);
+            })
+        }
+      });
+    }
+  </script></body>
+</html>
