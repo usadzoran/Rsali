@@ -1,125 +1,182 @@
-<script>
-  // استرجاع المنتجات من localStorage أو تهيئة جديدة
-  let produits = JSON.parse(localStorage.getItem("produits") || "{}");
-  let produitsActuels = [];
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تطبيق الفاتورة بالكود بار</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <style>
+    body { font-family: sans-serif; direction: rtl; padding: 20px; }
+    #scanner { width: 100%; height: 200px; border: 2px solid #333; margin: 10px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    input, button, select { padding: 10px; margin: 5px 0; width: 100%; }
+    .section { display: none; }
+    .active { display: block; }
+    .tab { cursor: pointer; display: inline-block; padding: 10px 20px; background: #eee; margin: 5px; border-radius: 5px; }
+    .tab.active { background: #4caf50; color: white; }
+    .btn { background: #4caf50; color: white; border: none; cursor: pointer; }
+  </style>
+</head>
+<body>
 
-  function startScanner() {
-    Quagga.init({
-      inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#scanner') },
-      decoder: { readers: ["ean_reader"] },
-    }, err => {
-      if (err) { console.error(err); return; }
-      Quagga.start();
-    });
+  <h2>📱 تطبيق الفاتورة بالكود بار</h2>
+  <div>
+    <span class="tab active" onclick="showSection('new')">🧾 فاتورة جديدة</span>
+    <span class="tab" onclick="showSection('archive')">📂 الفواتير المحفوظة</span>
+  </div>
 
-    Quagga.onDetected(data => {
-      const code = data.codeResult.code;
-      Quagga.offDetected(); // لمنع التكرار السريع
-      handleScannedCode(code);
-      setTimeout(() => Quagga.onDetected(d => handleScannedCode(d.codeResult.code)), 1500); // إعادة الاستماع بعد ثانية ونصف
-    });
-  }
+  <!-- قسم إنشاء فاتورة جديدة -->
+  <div id="new" class="section active">
+    <h3>🧾 إنشاء فاتورة</h3>
+    <input type="text" id="clientName" placeholder="اسم الزبون">
 
-  function handleScannedCode(code) {
-    if (produits[code]) {
-      const produit = produits[code];
-      produitsActuels.push(produit);
+    <div id="scanner"></div>
+    <button class="btn" onclick="startScanner()">📸 بدء المسح</button>
+    <button class="btn" onclick="stopScanner()">🛑 إيقاف الكاميرا</button>
+
+    <table>
+      <thead>
+        <tr>
+          <th>المنتج</th>
+          <th>السعر</th>
+        </tr>
+      </thead>
+      <tbody id="productList"></tbody>
+    </table>
+
+    <h4>✅ المجموع: <span id="total">0</span> دج</h4>
+    <button class="btn" onclick="saveInvoice()">💾 حفظ الفاتورة</button>
+  </div>
+
+  <!-- قسم الفواتير السابقة -->
+  <div id="archive" class="section">
+    <h3>📂 الفواتير السابقة</h3>
+    <div id="invoicesList"></div>
+  </div>
+
+  <script>
+    // استرجاع المنتجات من localStorage أو تهيئة جديدة
+    let produits = JSON.parse(localStorage.getItem("produits") || "{}");
+    let produitsActuels = [];
+
+    function startScanner() {
+      Quagga.init({
+        inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#scanner') },
+        decoder: { readers: ["ean_reader"] },
+      }, err => {
+        if (err) { console.error(err); return; }
+        Quagga.start();
+      });
+
+      Quagga.onDetected(data => {
+        const code = data.codeResult.code;
+        Quagga.offDetected(); // لمنع التكرار
+        handleScannedCode(code);
+        setTimeout(() => Quagga.onDetected(d => handleScannedCode(d.codeResult.code)), 1500);
+      });
+    }
+
+    function handleScannedCode(code) {
+      if (produits[code]) {
+        const produit = produits[code];
+        produitsActuels.push(produit);
+        updateProductList();
+      } else {
+        const nom = prompt("✅ منتج جديد - أدخل اسم المنتج:");
+        if (!nom) return;
+        const prix = parseFloat(prompt("💰 أدخل سعر المنتج:"));
+        if (isNaN(prix)) return;
+
+        const produit = { nom, prix };
+        produits[code] = produit;
+        localStorage.setItem("produits", JSON.stringify(produits));
+        produitsActuels.push(produit);
+        updateProductList();
+      }
+    }
+
+    function stopScanner() {
+      Quagga.stop();
+    }
+
+    function updateProductList() {
+      const tbody = document.getElementById("productList");
+      tbody.innerHTML = "";
+      let total = 0;
+      produitsActuels.forEach(p => {
+        const row = `<tr><td>${p.nom}</td><td>${p.prix} دج</td></tr>`;
+        tbody.innerHTML += row;
+        total += p.prix;
+      });
+      document.getElementById("total").innerText = total;
+    }
+
+    function saveInvoice() {
+      const client = document.getElementById("clientName").value.trim();
+      if (!client || produitsActuels.length === 0) {
+        alert("يرجى إدخال اسم الزبون وإضافة منتجات!");
+        return;
+      }
+
+      const facture = {
+        id: Date.now(),
+        client,
+        date: new Date().toLocaleString(),
+        produits: produitsActuels,
+        total: produitsActuels.reduce((sum, p) => sum + p.prix, 0)
+      };
+
+      const saved = JSON.parse(localStorage.getItem("factures") || "[]");
+      saved.push(facture);
+      localStorage.setItem("factures", JSON.stringify(saved));
+
+      alert("✅ تم حفظ الفاتورة");
+      produitsActuels = [];
+      document.getElementById("clientName").value = "";
       updateProductList();
-    } else {
-      const nom = prompt("✅ منتج جديد - أدخل اسم المنتج:");
-      if (!nom) return;
-      const prix = parseFloat(prompt("💰 أدخل سعر المنتج:"));
-      if (isNaN(prix)) return;
-
-      const produit = { nom, prix };
-      produits[code] = produit;
-      localStorage.setItem("produits", JSON.stringify(produits));
-      produitsActuels.push(produit);
-      updateProductList();
-    }
-  }
-
-  function stopScanner() {
-    Quagga.stop();
-  }
-
-  function updateProductList() {
-    const tbody = document.getElementById("productList");
-    tbody.innerHTML = "";
-    let total = 0;
-    produitsActuels.forEach(p => {
-      const row = `<tr><td>${p.nom}</td><td>${p.prix} دج</td></tr>`;
-      tbody.innerHTML += row;
-      total += p.prix;
-    });
-    document.getElementById("total").innerText = total;
-  }
-
-  function saveInvoice() {
-    const client = document.getElementById("clientName").value.trim();
-    if (!client || produitsActuels.length === 0) {
-      alert("يرجى إدخال اسم الزبون وإضافة منتجات!");
-      return;
+      showSection('archive');
+      afficherFactures();
     }
 
-    const facture = {
-      id: Date.now(),
-      client,
-      date: new Date().toLocaleString(),
-      produits: produitsActuels,
-      total: produitsActuels.reduce((sum, p) => sum + p.prix, 0)
-    };
+    function afficherFactures() {
+      const container = document.getElementById("invoicesList");
+      container.innerHTML = "";
+      const saved = JSON.parse(localStorage.getItem("factures") || "[]");
 
-    const saved = JSON.parse(localStorage.getItem("factures") || "[]");
-    saved.push(facture);
-    localStorage.setItem("factures", JSON.stringify(saved));
+      if (saved.length === 0) {
+        container.innerHTML = "<p>لا توجد فواتير محفوظة.</p>";
+        return;
+      }
 
-    alert("✅ تم حفظ الفاتورة");
-    produitsActuels = [];
-    document.getElementById("clientName").value = "";
-    updateProductList();
-    showSection('archive');
-    afficherFactures();
-  }
-
-  function afficherFactures() {
-    const container = document.getElementById("invoicesList");
-    container.innerHTML = "";
-    const saved = JSON.parse(localStorage.getItem("factures") || "[]");
-
-    if (saved.length === 0) {
-      container.innerHTML = "<p>لا توجد فواتير محفوظة.</p>";
-      return;
+      saved.reverse().forEach(f => {
+        const produitsHTML = f.produits.map(p => `<li>${p.nom} - ${p.prix} دج</li>`).join("");
+        const div = document.createElement("div");
+        div.style.border = "1px solid #ccc";
+        div.style.margin = "10px 0";
+        div.style.padding = "10px";
+        div.innerHTML = `
+          <strong>👤 الزبون:</strong> ${f.client}<br>
+          <strong>🕒 التاريخ:</strong> ${f.date}<br>
+          <strong>📦 المنتجات:</strong><ul>${produitsHTML}</ul>
+          <strong>💰 المجموع:</strong> ${f.total} دج
+        `;
+        container.appendChild(div);
+      });
     }
 
-    saved.reverse().forEach(f => {
-      const produitsHTML = f.produits.map(p => `<li>${p.nom} - ${p.prix} دج</li>`).join("");
-      const div = document.createElement("div");
-      div.style.border = "1px solid #ccc";
-      div.style.margin = "10px 0";
-      div.style.padding = "10px";
-      div.innerHTML = `
-        <strong>👤 الزبون:</strong> ${f.client}<br>
-        <strong>🕒 التاريخ:</strong> ${f.date}<br>
-        <strong>📦 المنتجات:</strong><ul>${produitsHTML}</ul>
-        <strong>💰 المجموع:</strong> ${f.total} دج
-      `;
-      container.appendChild(div);
-    });
-  }
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => {
+        if (t.textContent.includes(id === 'new' ? "فاتورة جديدة" : "الفواتير")) t.classList.add('active');
+      });
+      if (id === 'archive') afficherFactures();
+    }
 
-  function showSection(id) {
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => {
-      if (t.textContent.includes(id === 'new' ? "فاتورة جديدة" : "الفواتير")) t.classList.add('active');
+    document.addEventListener("DOMContentLoaded", () => {
+      produits = JSON.parse(localStorage.getItem("produits") || "{}");
     });
-    if (id === 'archive') afficherFactures();
-  }
-
-  // تحميل المنتجات القديمة تلقائيًا عند تشغيل الصفحة
-  document.addEventListener("DOMContentLoaded", () => {
-    produits = JSON.parse(localStorage.getItem("produits") || "{}");
-  });
-</script>
+  </script>
+</body>
+</html>
