@@ -1,187 +1,167 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="ar">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Brilex - Gestion de Factures</title>
+  <meta charset="UTF-8">
+  <title>تطبيق الفواتير</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f2f2f2;
-    }
-    header {
-      background-color: #007bff;
-      color: white;
-      padding: 1rem;
-      text-align: center;
-    }
-    main {
-      padding: 1rem;
-    }
-    section {
-      margin-bottom: 2rem;
-    }
-    h2 {
-      color: #007bff;
-    }
-    input, button {
-      display: block;
-      margin: 0.5rem 0;
-      padding: 0.5rem;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    video {
-      width: 100%;
-      max-height: 200px;
-      display: none;
-      margin-top: 10px;
-    }
+    body { font-family: sans-serif; direction: rtl; padding: 20px; }
+    #scanner { width: 100%; height: 200px; border: 2px solid #333; margin: 10px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    input, button, select { padding: 10px; margin: 5px 0; width: 100%; }
+    .section { display: none; }
+    .active { display: block; }
+    .tab { cursor: pointer; display: inline-block; padding: 10px 20px; background: #eee; margin: 5px; border-radius: 5px; }
+    .tab.active { background: #4caf50; color: white; }
+    .btn { background: #4caf50; color: white; border: none; cursor: pointer; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Brilex</h1>
-  </header>
-  <main>
 
-    <!-- Section Produits -->
-    <section>
-      <h2>Ajouter un produit</h2>
-      <button onclick="startScanner('product')">📷 Scanner Code-barres</button>
-      <video id="video"></video>
-      <input type="text" id="product-barcode" placeholder="Code-barres (manuel ou scanner)">
-      <input type="text" id="product-name" placeholder="Nom du produit">
-      <input type="number" id="product-price" placeholder="Prix">
-      <button onclick="addProduct()">Ajouter Produit</button>
-    </section>
+  <h2>📱 تطبيق الفاتورة بالكودبار</h2>
+  <div>
+    <span class="tab active" onclick="showSection('new')">🧾 فاتورة جديدة</span>
+    <span class="tab" onclick="showSection('archive')">📂 الفواتير المحفوظة</span>
+  </div>
 
-    <!-- Section Facture -->
-    <section>
-      <h2>Nouvelle Facture</h2>
-      <input type="text" id="client-name" placeholder="Nom du client">
-      <input type="text" id="client-address" placeholder="Adresse du client">
-      <button onclick="startScanner('invoice')">📷 Scanner Produit</button>
-      <video id="video-invoice"></video>
-      <input type="text" id="invoice-barcode" placeholder="Code-barres produit (manuel ou scanner)">
-      <button onclick="addProductToInvoiceManual()">➕ Ajouter produit à la facture</button>
-      <ul id="invoice-items"></ul>
-      <h3>Total: <span id="invoice-total">0</span> DH</h3>
-      <button onclick="setPaymentStatus('payé')">✅ Payé</button>
-      <button onclick="setPaymentStatus('dette')">💰 Dette</button>
-    </section>
+  <!-- فاتورة جديدة -->
+  <div id="new" class="section active">
+    <h3>🧾 إنشاء فاتورة</h3>
+    <input type="text" id="clientName" placeholder="اسم الزبون">
 
-  </main>
+    <div id="scanner"></div>
+    <button class="btn" onclick="startScanner()">📸 بدء المسح</button>
+    <button class="btn" onclick="stopScanner()">🛑 إيقاف الكاميرا</button>
+
+    <table>
+      <thead>
+        <tr>
+          <th>المنتج</th>
+          <th>السعر</th>
+        </tr>
+      </thead>
+      <tbody id="productList"></tbody>
+    </table>
+
+    <h4>✅ المجموع: <span id="total">0</span> دج</h4>
+    <button class="btn" onclick="saveInvoice()">💾 حفظ الفاتورة</button>
+  </div>
+
+  <!-- الفواتير المحفوظة -->
+  <div id="archive" class="section">
+    <h3>📂 الفواتير السابقة</h3>
+    <div id="invoicesList"></div>
+  </div>
 
   <script>
-    let scannerType = '';
-    let products = JSON.parse(localStorage.getItem('products') || '[]');
-    let invoiceItems = [];
+    // بيانات المنتجات: barcode => { nom, prix }
+    const produits = {
+      "123456789012": { nom: "زيت 1L", prix: 300 },
+      "987654321098": { nom: "سكر 1kg", prix: 150 },
+      "111111111111": { nom: "قهوة 250g", prix: 400 },
+    };
 
-    function startScanner(type) {
-      const video = (type === 'product') ? document.getElementById('video') : document.getElementById('video-invoice');
-      scannerType = type;
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(stream => {
-          video.srcObject = stream;
-          video.play();
-          video.style.display = 'block';
-          detectBarcode(video);
-        })
-        .catch(err => {
-          alert("Erreur d'accès à la caméra : " + err.message);
-        });
+    let produitsActuels = [];
+
+    function startScanner() {
+      Quagga.init({
+        inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#scanner') },
+        decoder: { readers: ["ean_reader"] },
+      }, err => {
+        if (err) { console.error(err); return; }
+        Quagga.start();
+      });
+
+      Quagga.onDetected(data => {
+        const code = data.codeResult.code;
+        if (produits[code]) {
+          const produit = produits[code];
+          produitsActuels.push(produit);
+          updateProductList();
+        } else {
+          alert("المنتج غير موجود!");
+        }
+      });
     }
 
-    async function detectBarcode(video) {
-      if (!('BarcodeDetector' in window)) {
-        alert("BarcodeDetector non supporté sur ce navigateur.");
+    function stopScanner() {
+      Quagga.stop();
+    }
+
+    function updateProductList() {
+      const tbody = document.getElementById("productList");
+      tbody.innerHTML = "";
+      let total = 0;
+      produitsActuels.forEach(p => {
+        const row = `<tr><td>${p.nom}</td><td>${p.prix} دج</td></tr>`;
+        tbody.innerHTML += row;
+        total += p.prix;
+      });
+      document.getElementById("total").innerText = total;
+    }
+
+    function saveInvoice() {
+      const client = document.getElementById("clientName").value.trim();
+      if (!client || produitsActuels.length === 0) {
+        alert("يرجى إدخال اسم الزبون وإضافة منتجات!");
         return;
       }
 
-      const detector = new BarcodeDetector({ formats: ['code_128', 'ean_13', 'qr_code'] });
-      const detect = async () => {
-        try {
-          const barcodes = await detector.detect(video);
-          if (barcodes.length > 0) {
-            const code = barcodes[0].rawValue;
-            if (scannerType === 'product') {
-              document.getElementById("product-barcode").value = code;
-            } else {
-              document.getElementById("invoice-barcode").value = code;
-              addProductToInvoice(code);
-            }
-            stopCamera(video);
-          } else {
-            requestAnimationFrame(() => detectBarcode(video));
-          }
-        } catch (e) {
-          console.error("Erreur détection code-barres", e);
-          stopCamera(video);
-        }
+      const facture = {
+        id: Date.now(),
+        client,
+        date: new Date().toLocaleString(),
+        produits: produitsActuels,
+        total: produitsActuels.reduce((sum, p) => sum + p.prix, 0)
       };
-      detect();
+
+      const saved = JSON.parse(localStorage.getItem("factures") || "[]");
+      saved.push(facture);
+      localStorage.setItem("factures", JSON.stringify(saved));
+
+      alert("✅ تم حفظ الفاتورة");
+      produitsActuels = [];
+      document.getElementById("clientName").value = "";
+      updateProductList();
+      showSection('archive');
+      afficherFactures();
     }
 
-    function stopCamera(video) {
-      const stream = video.srcObject;
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-      video.style.display = 'none';
-    }
+    function afficherFactures() {
+      const container = document.getElementById("invoicesList");
+      container.innerHTML = "";
+      const saved = JSON.parse(localStorage.getItem("factures") || "[]");
 
-    function addProduct() {
-      const barcode = document.getElementById("product-barcode").value.trim();
-      const name = document.getElementById("product-name").value.trim();
-      const price = parseFloat(document.getElementById("product-price").value);
-      if (!barcode || !name || isNaN(price)) return alert("Tous les champs sont requis");
-      products.push({ barcode, name, price });
-      localStorage.setItem('products', JSON.stringify(products));
-      alert("Produit ajouté");
-      document.getElementById("product-barcode").value = '';
-      document.getElementById("product-name").value = '';
-      document.getElementById("product-price").value = '';
-    }
-
-    function addProductToInvoice(barcode) {
-      const product = products.find(p => p.barcode === barcode);
-      if (!product) return alert("Produit introuvable");
-      invoiceItems.push(product);
-      const list = document.getElementById("invoice-items");
-      const item = document.createElement("li");
-      item.textContent = `${product.name} - ${product.price} DH`;
-      list.appendChild(item);
-      updateInvoiceTotal();
-    }
-
-    function addProductToInvoiceManual() {
-      const barcode = document.getElementById("invoice-barcode").value.trim();
-      if (!barcode) return alert("Veuillez entrer un code-barres");
-      addProductToInvoice(barcode);
-      document.getElementById("invoice-barcode").value = '';
-    }
-
-    function updateInvoiceTotal() {
-      const total = invoiceItems.reduce((sum, p) => sum + p.price, 0);
-      document.getElementById("invoice-total").textContent = total.toFixed(2);
-    }
-
-    function setPaymentStatus(status) {
-      const name = document.getElementById("client-name").value.trim();
-      const address = document.getElementById("client-address").value.trim();
-      if (!name || !address || invoiceItems.length === 0) {
-        return alert("Complétez tous les champs de la facture");
+      if (saved.length === 0) {
+        container.innerHTML = "<p>لا توجد فواتير محفوظة.</p>";
+        return;
       }
 
-      alert(`Facture enregistrée comme ${status.toUpperCase()} pour ${name}`);
-      invoiceItems = [];
-      document.getElementById("invoice-items").innerHTML = '';
-      updateInvoiceTotal();
-      document.getElementById("client-name").value = '';
-      document.getElementById("client-address").value = '';
+      saved.reverse().forEach(f => {
+        const produitsHTML = f.produits.map(p => `<li>${p.nom} - ${p.prix} دج</li>`).join("");
+        const div = document.createElement("div");
+        div.style.border = "1px solid #ccc";
+        div.style.margin = "10px 0";
+        div.style.padding = "10px";
+        div.innerHTML = `
+          <strong>👤 الزبون:</strong> ${f.client}<br>
+          <strong>🕒 التاريخ:</strong> ${f.date}<br>
+          <strong>📦 المنتجات:</strong><ul>${produitsHTML}</ul>
+          <strong>💰 المجموع:</strong> ${f.total} دج
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => {
+        if (t.textContent.includes(id === 'new' ? "فاتورة جديدة" : "الفواتير")) t.classList.add('active');
+      });
+      if (id === 'archive') afficherFactures();
     }
   </script>
 </body>
