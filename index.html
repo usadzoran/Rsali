@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brilex - Gestion de Factures</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f2f2f2;
+    }
+    header {
+      background-color: #007bff;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+    main {
+      padding: 1rem;
+    }
+    section {
+      margin-bottom: 2rem;
+    }
+    h2 {
+      color: #007bff;
+    }
+    input, button {
+      display: block;
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      width: 100%;
+    }
+    video {
+      width: 100%;
+      max-height: 200px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Brilex</h1>
+  </header>
+  <main>
+
+    <!-- Section Produits -->
+    <section>
+      <h2>Ajouter un produit</h2>
+      <button onclick="startScanner('product')">📷 Scanner Code-barres</button>
+      <video id="video"></video>
+      <input type="text" id="product-barcode" placeholder="Code-barres" readonly>
+      <input type="text" id="product-name" placeholder="Nom du produit">
+      <input type="number" id="product-price" placeholder="Prix">
+      <button onclick="addProduct()">Ajouter Produit</button>
+    </section>
+
+    <!-- Section Facture -->
+    <section>
+      <h2>Nouvelle Facture</h2>
+      <input type="text" id="client-name" placeholder="Nom du client">
+      <input type="text" id="client-address" placeholder="Adresse du client">
+      <button onclick="startScanner('invoice')">📷 Scanner Produit</button>
+      <input type="text" id="invoice-barcode" placeholder="Code-barres produit" readonly>
+      <ul id="invoice-items"></ul>
+      <h3>Total: <span id="invoice-total">0</span> DH</h3>
+      <button onclick="setPaymentStatus('payé')">✅ Payé</button>
+      <button onclick="setPaymentStatus('dette')">💰 Dette</button>
+    </section>
+
+  </main>
+
+  <script>
+    let scannerType = '';
+    let products = JSON.parse(localStorage.getItem('products') || '[]');
+    let invoiceItems = [];
+
+    function startScanner(type) {
+      scannerType = type;
+      const video = document.getElementById("video");
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => {
+          video.srcObject = stream;
+          video.play();
+          video.style.display = 'block';
+          detectBarcode(video);
+        });
+    }
+
+    async function detectBarcode(video) {
+      const detector = new BarcodeDetector({ formats: ['code_128', 'ean_13'] });
+      const detect = async () => {
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            const code = barcodes[0].rawValue;
+            if (scannerType === 'product') {
+              document.getElementById("product-barcode").value = code;
+            } else {
+              document.getElementById("invoice-barcode").value = code;
+              addProductToInvoice(code);
+            }
+            stopCamera(video);
+          } else {
+            requestAnimationFrame(() => detectBarcode(video));
+          }
+        } catch (e) {
+          console.error("Barcode detection failed", e);
+          stopCamera(video);
+        }
+      };
+      detect();
+    }
+
+    function stopCamera(video) {
+      const stream = video.srcObject;
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      video.style.display = 'none';
+    }
+
+    function addProduct() {
+      const barcode = document.getElementById("product-barcode").value;
+      const name = document.getElementById("product-name").value;
+      const price = parseFloat(document.getElementById("product-price").value);
+      if (!barcode || !name || isNaN(price)) return alert("Tous les champs sont requis");
+      products.push({ barcode, name, price });
+      localStorage.setItem('products', JSON.stringify(products));
+      alert("Produit ajouté");
+      document.getElementById("product-barcode").value = '';
+      document.getElementById("product-name").value = '';
+      document.getElementById("product-price").value = '';
+    }
+
+    function addProductToInvoice(barcode) {
+      const product = products.find(p => p.barcode === barcode);
+      if (!product) return alert("Produit introuvable");
+      invoiceItems.push(product);
+      const list = document.getElementById("invoice-items");
+      const item = document.createElement("li");
+      item.textContent = `${product.name} - ${product.price} DH`;
+      list.appendChild(item);
+      updateInvoiceTotal();
+    }
+
+    function updateInvoiceTotal() {
+      const total = invoiceItems.reduce((sum, p) => sum + p.price, 0);
+      document.getElementById("invoice-total").textContent = total.toFixed(2);
+    }
+
+    function setPaymentStatus(status) {
+      const name = document.getElementById("client-name").value;
+      const address = document.getElementById("client-address").value;
+      if (!name || !address || invoiceItems.length === 0) return alert("Complétez tous les champs de la facture");
+      alert(`Facture enregistrée comme ${status.toUpperCase()} pour ${name}`);
+      // Réinitialisation
+      invoiceItems = [];
+      document.getElementById("invoice-items").innerHTML = '';
+      updateInvoiceTotal();
+      document.getElementById("client-name").value = '';
+      document.getElementById("client-address").value = '';
+    }
+  </script>
+</body>
+</html>
