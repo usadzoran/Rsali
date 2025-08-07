@@ -31,14 +31,13 @@
       margin: 0.5rem 0;
       padding: 0.5rem;
       width: 100%;
+      box-sizing: border-box;
     }
     video {
       width: 100%;
       max-height: 200px;
       display: none;
-    }
-    #invoice-items li {
-      margin-bottom: 0.5rem;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -53,7 +52,7 @@
       <h2>Ajouter un produit</h2>
       <button onclick="startScanner('product')">📷 Scanner Code-barres</button>
       <video id="video"></video>
-      <input type="text" id="product-barcode" placeholder="Code-barres" readonly>
+      <input type="text" id="product-barcode" placeholder="Code-barres (manuel ou scanner)">
       <input type="text" id="product-name" placeholder="Nom du produit">
       <input type="number" id="product-price" placeholder="Prix">
       <button onclick="addProduct()">Ajouter Produit</button>
@@ -65,7 +64,9 @@
       <input type="text" id="client-name" placeholder="Nom du client">
       <input type="text" id="client-address" placeholder="Adresse du client">
       <button onclick="startScanner('invoice')">📷 Scanner Produit</button>
-      <input type="text" id="invoice-barcode" placeholder="Code-barres produit" readonly>
+      <video id="video-invoice"></video>
+      <input type="text" id="invoice-barcode" placeholder="Code-barres produit (manuel ou scanner)">
+      <button onclick="addProductToInvoiceManual()">➕ Ajouter produit à la facture</button>
       <ul id="invoice-items"></ul>
       <h3>Total: <span id="invoice-total">0</span> DH</h3>
       <button onclick="setPaymentStatus('payé')">✅ Payé</button>
@@ -80,19 +81,27 @@
     let invoiceItems = [];
 
     function startScanner(type) {
+      const video = (type === 'product') ? document.getElementById('video') : document.getElementById('video-invoice');
       scannerType = type;
-      const video = document.getElementById("video");
       navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
         .then(stream => {
           video.srcObject = stream;
           video.play();
           video.style.display = 'block';
           detectBarcode(video);
+        })
+        .catch(err => {
+          alert("Erreur d'accès à la caméra : " + err.message);
         });
     }
 
     async function detectBarcode(video) {
-      const detector = new BarcodeDetector({ formats: ['code_128', 'ean_13'] });
+      if (!('BarcodeDetector' in window)) {
+        alert("BarcodeDetector non supporté sur ce navigateur.");
+        return;
+      }
+
+      const detector = new BarcodeDetector({ formats: ['code_128', 'ean_13', 'qr_code'] });
       const detect = async () => {
         try {
           const barcodes = await detector.detect(video);
@@ -109,7 +118,7 @@
             requestAnimationFrame(() => detectBarcode(video));
           }
         } catch (e) {
-          console.error("Barcode detection failed", e);
+          console.error("Erreur détection code-barres", e);
           stopCamera(video);
         }
       };
@@ -125,8 +134,8 @@
     }
 
     function addProduct() {
-      const barcode = document.getElementById("product-barcode").value;
-      const name = document.getElementById("product-name").value;
+      const barcode = document.getElementById("product-barcode").value.trim();
+      const name = document.getElementById("product-name").value.trim();
       const price = parseFloat(document.getElementById("product-price").value);
       if (!barcode || !name || isNaN(price)) return alert("Tous les champs sont requis");
       products.push({ barcode, name, price });
@@ -148,17 +157,26 @@
       updateInvoiceTotal();
     }
 
+    function addProductToInvoiceManual() {
+      const barcode = document.getElementById("invoice-barcode").value.trim();
+      if (!barcode) return alert("Veuillez entrer un code-barres");
+      addProductToInvoice(barcode);
+      document.getElementById("invoice-barcode").value = '';
+    }
+
     function updateInvoiceTotal() {
       const total = invoiceItems.reduce((sum, p) => sum + p.price, 0);
       document.getElementById("invoice-total").textContent = total.toFixed(2);
     }
 
     function setPaymentStatus(status) {
-      const name = document.getElementById("client-name").value;
-      const address = document.getElementById("client-address").value;
-      if (!name || !address || invoiceItems.length === 0) return alert("Complétez tous les champs de la facture");
+      const name = document.getElementById("client-name").value.trim();
+      const address = document.getElementById("client-address").value.trim();
+      if (!name || !address || invoiceItems.length === 0) {
+        return alert("Complétez tous les champs de la facture");
+      }
+
       alert(`Facture enregistrée comme ${status.toUpperCase()} pour ${name}`);
-      // Réinitialisation
       invoiceItems = [];
       document.getElementById("invoice-items").innerHTML = '';
       updateInvoiceTotal();
