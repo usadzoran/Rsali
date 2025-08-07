@@ -44,6 +44,10 @@
       display: flex;
       gap: 10px;
     }
+    .input-group button {
+      flex-shrink: 0;
+      width: 50px;
+    }
     .input-group input {
       flex: 1;
     }
@@ -75,8 +79,8 @@
   </nav>  <section id="produits" style="display:block">
     <h2>Ajouter un produit</h2>
     <div class="input-group">
-      <input type="text" placeholder="Scanner le code-barres" id="barcode" />
       <button onclick="scanCode('barcode')">📷</button>
+      <input type="text" placeholder="Scanner le code-barres" id="barcode" />
     </div>
     <input type="text" placeholder="Nom du produit" id="nomProduit" />
     <input type="text" placeholder="Couleur" id="couleurProduit" />
@@ -88,8 +92,8 @@
     <input type="text" placeholder="Nom du client" id="clientNom" />
     <input type="text" placeholder="Adresse ou emplacement" id="clientAdresse" />
     <div class="input-group">
-      <input type="text" placeholder="Code-barres produit" id="factureBarcode" />
       <button onclick="scanCode('factureBarcode')">📷</button>
+      <input type="text" placeholder="Code-barres produit" id="factureBarcode" />
     </div>
     <button onclick="ajouterALaFacture()">Ajouter produit</button>
     <div class="invoice" id="factureDetail"></div>
@@ -195,9 +199,10 @@
       const html5QrCode = new Html5Qrcode("qr-reader");
 
       Html5Qrcode.getCameras().then(devices => {
-        if (devices && devices.length) {
+        const backCamera = devices.find(device => device.label.toLowerCase().includes("back")) || devices[0];
+        if (backCamera) {
           html5QrCode.start(
-            devices[0].id,
+            backCamera.id,
             {
               fps: 10,
               qrbox: 250
@@ -209,7 +214,10 @@
             },
             errorMessage => {
               // console.log(errorMessage);
-            })
+            }
+          );
+        } else {
+          alert("Aucune caméra détectée.");
         }
       });
     }
