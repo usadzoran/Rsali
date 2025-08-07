@@ -1,101 +1,220 @@
-<!DOCTYPE html><html lang="fr">
+<!DOCTYPE html>
+<html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Brilex - Gestion</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brilex</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-    header { background-color: #0056b3; color: white; padding: 10px; text-align: center; }
-    nav { display: flex; justify-content: center; background-color: #e0e0e0; }
-    nav button { flex: 1; padding: 10px; border: none; background-color: #e0e0e0; font-size: 16px; }
-    nav button.active { background-color: #0056b3; color: white; }
-    section { padding: 20px; display: none; }
-    section.active { display: block; }
-    .input-group { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    video { width: 100%; max-height: 300px; margin-top: 10px; }
-    .status { color: red; font-size: 14px; }
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+    }
+    header {
+      background-color: #0052cc;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+    nav {
+      display: flex;
+      justify-content: space-around;
+      background-color: #e0e0e0;
+    }
+    nav button {
+      flex: 1;
+      padding: 1rem;
+      border: none;
+      background: transparent;
+      font-weight: bold;
+    }
+    section {
+      display: none;
+      padding: 1rem;
+    }
+    section.active {
+      display: block;
+    }
+    input, select, button, textarea {
+      display: block;
+      margin: 0.5rem 0;
+      padding: 0.6rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .camera-btn {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 0.6rem;
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
   </style>
 </head>
 <body>
+
   <header>
-    <h1>Brilex</h1>
-  </header>  <nav>
-    <button onclick="showSection('produits')" class="active">Produits</button>
-    <button onclick="showSection('facturation')">Facturation</button>
-    <button onclick="showSection('analyse')">Analyse</button>
-  </nav>  <section id="produits" class="active">
+    <h1>Brilex App</h1>
+  </header>
+
+  <nav>
+    <button onclick="showSection('products')">Produits</button>
+    <button onclick="showSection('invoice')">Facturation</button>
+    <button onclick="showSection('analysis')">Analyse</button>
+  </nav>
+
+  <!-- Produits Section -->
+  <section id="products" class="active">
     <h2>Ajouter un produit</h2>
-    <div class="input-group">
-      <button onclick="startCamera()">📷</button>
-      <input type="text" id="barcodeInput" placeholder="Scanner le code-barres">
-    </div>
-    <div id="reader" style="width: 100%;"></div>
-    <input type="text" id="productName" placeholder="Nom du produit">
-    <input type="text" id="productColor" placeholder="Couleur">
-    <input type="number" id="productPrice" placeholder="Prix">
+    <button class="camera-btn" onclick="startCamera()">📷 Scanner le code-barres</button>
+    <input type="text" id="product-barcode" placeholder="Ou entrez le code-barres manuellement">
+    <input type="text" id="product-name" placeholder="Nom du produit">
+    <input type="text" id="product-color" placeholder="Couleur">
+    <input type="number" id="product-price" placeholder="Prix">
     <button onclick="addProduct()">Ajouter</button>
-    <p id="status" class="status"></p>
-  </section>  <section id="facturation">
+    <video id="camera" style="width:100%; max-height:200px; display:none;" autoplay></video>
+    <div id="product-list"></div>
+  </section>
+
+  <!-- Facturation Section -->
+  <section id="invoice">
     <h2>Créer une facture</h2>
-    <!-- À compléter selon الطلبات السابقة -->
-  </section>  <section id="analyse">
-    <h2>Analyse des ventes</h2>
-    <!-- À compléter selon الطلبات السابقة -->
-  </section>  <script>
-    let html5QrCode;
+    <input type="text" id="client-name" placeholder="Nom du client">
+    <input type="text" id="invoice-barcode" placeholder="Scanner ou entrer un code-barres">
+    <button class="camera-btn" onclick="startCamera(true)">📷 Scanner un produit</button>
+    <button onclick="addToInvoice()">Ajouter au panier</button>
+    <ul id="invoice-items"></ul>
+    <input type="date" id="invoice-date">
+    <select id="invoice-status">
+      <option value="Payé">✅ Payé</option>
+      <option value="Dette">💰 Dette</option>
+    </select>
+    <button onclick="saveInvoice()">📄 Enregistrer la facture</button>
+    <button onclick="print()">🖨️ Imprimer</button>
+  </section>
 
-    function showSection(id) {
-      document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
-      document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
-      document.getElementById(id).classList.add('active');
-      document.querySelector(`nav button[onclick="showSection('${id}')"]`).classList.add('active');
-    }
+  <!-- Analyse Section -->
+  <section id="analysis">
+    <h2>Factures journalières</h2>
+    <ul id="invoice-history"></ul>
+  </section>
 
-    async function startCamera() {
-      const status = document.getElementById("status");
-      status.textContent = "";
+  <script>
+    const products = JSON.parse(localStorage.getItem('products') || '[]');
+    const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
 
-      if (html5QrCode) {
-        await html5QrCode.stop().catch(_ => {});
-        html5QrCode.clear();
-      }
+    const showSection = (id) => {
+      document.querySelectorAll("section").forEach(sec => sec.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+      if (id === 'analysis') renderInvoices();
+      if (id === 'products') renderProducts();
+    };
 
-      html5QrCode = new Html5Qrcode("reader");
+    const renderProducts = () => {
+      const list = document.getElementById("product-list");
+      list.innerHTML = products.map(p => `<div>${p.name} (${p.barcode}) - ${p.price} DH</div>`).join("");
+    };
 
-      try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length) {
-          const backCamera = devices.find(d => d.label.toLowerCase().includes("back")) || devices[1] || devices[0];
+    const addProduct = () => {
+      const barcode = document.getElementById("product-barcode").value;
+      const name = document.getElementById("product-name").value;
+      const color = document.getElementById("product-color").value;
+      const price = parseFloat(document.getElementById("product-price").value);
+      if (!barcode || !name || isNaN(price)) return alert("Veuillez remplir tous les champs");
+      products.push({ barcode, name, color, price });
+      localStorage.setItem("products", JSON.stringify(products));
+      renderProducts();
+      document.getElementById("product-barcode").value = '';
+      document.getElementById("product-name").value = '';
+      document.getElementById("product-color").value = '';
+      document.getElementById("product-price").value = '';
+    };
 
-          await new Promise(res => setTimeout(res, 300)); // Delay fix
-          await html5QrCode.start(
-            { deviceId: { exact: backCamera.id } },
-            { fps: 10, qrbox: { width: 250, height: 250 } },
-            qrCodeMessage => {
-              document.getElementById("barcodeInput").value = qrCodeMessage;
-              html5QrCode.stop().then(() => html5QrCode.clear());
-            }
-          );
-        } else {
-          status.textContent = "Aucune caméra trouvée.";
+    const addToInvoice = () => {
+      const barcode = document.getElementById("invoice-barcode").value;
+      const product = products.find(p => p.barcode === barcode);
+      if (!product) return alert("Produit introuvable");
+      const list = document.getElementById("invoice-items");
+      const item = document.createElement("li");
+      item.textContent = `${product.name} - ${product.price} DH`;
+      list.appendChild(item);
+      document.getElementById("invoice-barcode").value = '';
+    };
+
+    const saveInvoice = () => {
+      const name = document.getElementById("client-name").value;
+      const date = document.getElementById("invoice-date").value;
+      const status = document.getElementById("invoice-status").value;
+      const items = Array.from(document.querySelectorAll("#invoice-items li")).map(li => li.textContent);
+      if (!name || !date || items.length === 0) return alert("Remplissez tous les champs");
+      invoices.push({ name, date, status, items });
+      localStorage.setItem("invoices", JSON.stringify(invoices));
+      document.getElementById("client-name").value = '';
+      document.getElementById("invoice-items").innerHTML = '';
+    };
+
+    const renderInvoices = () => {
+      const list = document.getElementById("invoice-history");
+      list.innerHTML = invoices.map(inv => `
+        <li>
+          ${inv.name} - ${inv.date} - ${inv.status}<br/>
+          Total: ${inv.items.reduce((sum, i) => sum + parseFloat(i.split('-')[1]), 0)} DH
+        </li>
+      `).join("");
+    };
+
+    let currentVideo;
+
+    const startCamera = (forInvoice = false) => {
+      const constraints = {
+        video: {
+          facingMode: "environment"
         }
-      } catch (err) {
-        status.textContent = "Erreur caméra: " + err;
-      }
-    }
+      };
+      const video = document.getElementById("camera");
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then((stream) => {
+          video.srcObject = stream;
+          video.style.display = 'block';
+          currentVideo = stream;
 
-    function addProduct() {
-      const code = document.getElementById("barcodeInput").value;
-      const name = document.getElementById("productName").value;
-      const color = document.getElementById("productColor").value;
-      const price = document.getElementById("productPrice").value;
-      if (code && name && price) {
-        localStorage.setItem(`product-${code}`, JSON.stringify({ name, color, price }));
-        alert("Produit ajouté avec succès !");
-      } else {
-        alert("Veuillez remplir tous les champs.");
+          const reader = new BarcodeDetector({ formats: ['ean_13', 'code_128'] });
+
+          const detectLoop = async () => {
+            try {
+              const detections = await reader.detect(video);
+              if (detections.length > 0) {
+                const code = detections[0].rawValue;
+                if (forInvoice) {
+                  document.getElementById("invoice-barcode").value = code;
+                } else {
+                  document.getElementById("product-barcode").value = code;
+                }
+                video.style.display = 'none';
+                stopCamera();
+              } else {
+                requestAnimationFrame(detectLoop);
+              }
+            } catch (e) {
+              alert("Erreur caméra : " + e.message);
+              stopCamera();
+            }
+          };
+          detectLoop();
+        })
+        .catch(e => alert("Erreur caméra : " + e.message));
+    };
+
+    const stopCamera = () => {
+      if (currentVideo) {
+        currentVideo.getTracks().forEach(track => track.stop());
+        currentVideo = null;
       }
-    }
-  </script></body>
+    };
+
+    window.addEventListener("beforeunload", stopCamera);
+  </script>
+</body>
 </html>
