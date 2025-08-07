@@ -1,233 +1,101 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html><html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Brilex App</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brilex - Gestion</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f4f4f4;
-      color: #333;
-    }
-    nav {
-      display: flex;
-      justify-content: space-around;
-      background: #007BFF;
-      padding: 10px;
-    }
-    nav button {
-      flex: 1;
-      padding: 12px;
-      background: #007BFF;
-      color: white;
-      border: none;
-      font-size: 16px;
-    }
-    nav button.active {
-      background: #0056b3;
-    }
-    section {
-      display: none;
-      padding: 15px;
-    }
-    input, select, button {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      font-size: 16px;
-    }
-    .input-group {
-      display: flex;
-      gap: 10px;
-    }
-    .input-group button {
-      flex-shrink: 0;
-      width: 50px;
-    }
-    .input-group input {
-      flex: 1;
-    }
-    .invoice {
-      border: 1px solid #ccc;
-      padding: 10px;
-      background: white;
-    }
-    .invoice-item {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 5px;
-    }
-    #qr-reader {
-      width: 100%;
-      max-width: 400px;
-      margin: 10px auto;
-    }
-    @media screen and (max-width: 600px) {
-      nav button { font-size: 14px; padding: 8px; }
-    }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    header { background-color: #0056b3; color: white; padding: 10px; text-align: center; }
+    nav { display: flex; justify-content: center; background-color: #e0e0e0; }
+    nav button { flex: 1; padding: 10px; border: none; background-color: #e0e0e0; font-size: 16px; }
+    nav button.active { background-color: #0056b3; color: white; }
+    section { padding: 20px; display: none; }
+    section.active { display: block; }
+    .input-group { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    video { width: 100%; max-height: 300px; margin-top: 10px; }
+    .status { color: red; font-size: 14px; }
   </style>
 </head>
 <body>
-  <nav>
-    <button class="active" onclick="showSection(event,'produits')">Produits</button>
-    <button onclick="showSection(event,'facture')">Facturation</button>
-    <button onclick="showSection(event,'analyse')">Analyse</button>
-  </nav>  <section id="produits" style="display:block">
+  <header>
+    <h1>Brilex</h1>
+  </header>  <nav>
+    <button onclick="showSection('produits')" class="active">Produits</button>
+    <button onclick="showSection('facturation')">Facturation</button>
+    <button onclick="showSection('analyse')">Analyse</button>
+  </nav>  <section id="produits" class="active">
     <h2>Ajouter un produit</h2>
     <div class="input-group">
-      <button onclick="scanCode('barcode')">📷</button>
-      <input type="text" placeholder="Scanner le code-barres" id="barcode" />
+      <button onclick="startCamera()">📷</button>
+      <input type="text" id="barcodeInput" placeholder="Scanner le code-barres">
     </div>
-    <input type="text" placeholder="Nom du produit" id="nomProduit" />
-    <input type="text" placeholder="Couleur" id="couleurProduit" />
-    <input type="number" placeholder="Prix" id="prixProduit" />
-    <button onclick="ajouterProduit()">Ajouter</button>
-    <div id="listeProduits"></div>
-  </section>  <section id="facture">
-    <h2>Nouvelle Facture</h2>
-    <input type="text" placeholder="Nom du client" id="clientNom" />
-    <input type="text" placeholder="Adresse ou emplacement" id="clientAdresse" />
-    <div class="input-group">
-      <button onclick="scanCode('factureBarcode')">📷</button>
-      <input type="text" placeholder="Code-barres produit" id="factureBarcode" />
-    </div>
-    <button onclick="ajouterALaFacture()">Ajouter produit</button>
-    <div class="invoice" id="factureDetail"></div>
-    <label for="paiementSelect">État de paiement</label>
-    <select id="paiementSelect">
-      <option value="payee">Payée</option>
-      <option value="dette">Dette</option>
-    </select>
-    <button onclick="imprimerFacture()">Imprimer Facture</button>
+    <div id="reader" style="width: 100%;"></div>
+    <input type="text" id="productName" placeholder="Nom du produit">
+    <input type="text" id="productColor" placeholder="Couleur">
+    <input type="number" id="productPrice" placeholder="Prix">
+    <button onclick="addProduct()">Ajouter</button>
+    <p id="status" class="status"></p>
+  </section>  <section id="facturation">
+    <h2>Créer une facture</h2>
+    <!-- À compléter selon الطلبات السابقة -->
   </section>  <section id="analyse">
     <h2>Analyse des ventes</h2>
-    <div id="salesSummary"></div>
-  </section>  <div id="qr-reader" style="display:none"></div>  <script>
-    let produits = JSON.parse(localStorage.getItem("produits") || "[]");
-    let factureItems = [];
+    <!-- À compléter selon الطلبات السابقة -->
+  </section>  <script>
     let html5QrCode;
 
-    function showSection(e, id) {
-      document.querySelectorAll("section").forEach(s => s.style.display = "none");
-      document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
-      document.getElementById(id).style.display = "block";
-      e.target.classList.add("active");
-      if (id === 'produits') renderProducts();
-      if (id === 'analyse') renderSales();
-      document.getElementById("qr-reader").style.display = "none";
-      if (html5QrCode) html5QrCode.stop();
+    function showSection(id) {
+      document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
+      document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      document.querySelector(`nav button[onclick="showSection('${id}')"]`).classList.add('active');
     }
 
-    function ajouterProduit() {
-      const p = {
-        code: document.getElementById("barcode").value,
-        nom: document.getElementById("nomProduit").value,
-        couleur: document.getElementById("couleurProduit").value,
-        prix: parseFloat(document.getElementById("prixProduit").value)
-      };
-      produits.push(p);
-      localStorage.setItem("produits", JSON.stringify(produits));
-      renderProducts();
-    }
+    async function startCamera() {
+      const status = document.getElementById("status");
+      status.textContent = "";
 
-    function renderProducts() {
-      const container = document.getElementById("listeProduits");
-      container.innerHTML = produits.map(p => `<div>${p.code} - ${p.nom} (${p.couleur}) - ${p.prix} DA</div>`).join("");
-    }
-
-    function ajouterALaFacture() {
-      const code = document.getElementById("factureBarcode").value;
-      const produit = produits.find(p => p.code === code);
-      if (produit) {
-        factureItems.push(produit);
-        renderFacture();
-      } else {
-        alert("Produit introuvable !");
+      if (html5QrCode) {
+        await html5QrCode.stop().catch(_ => {});
+        html5QrCode.clear();
       }
-    }
 
-    function renderFacture() {
-      const container = document.getElementById("factureDetail");
-      let total = 0;
-      container.innerHTML = factureItems.map(p => {
-        total += p.prix;
-        return `<div class='invoice-item'><span>${p.nom}</span><span>${p.prix} DA</span></div>`;
-      }).join("");
-      container.innerHTML += `<hr><strong>Total: ${total} DA</strong>`;
-    }
+      html5QrCode = new Html5Qrcode("reader");
 
-    function imprimerFacture() {
-      const nom = document.getElementById("clientNom").value;
-      const adresse = document.getElementById("clientAdresse").value;
-      const paiement = document.getElementById("paiementSelect").value;
-      const total = factureItems.reduce((sum, p) => sum + p.prix, 0);
-      const date = new Date().toLocaleDateString();
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length) {
+          const backCamera = devices.find(d => d.label.toLowerCase().includes("back")) || devices[1] || devices[0];
 
-      const vente = {
-        client: nom,
-        adresse,
-        date,
-        total,
-        paiement
-      };
-
-      const ventes = JSON.parse(localStorage.getItem("ventes") || "[]");
-      ventes.push(vente);
-      localStorage.setItem("ventes", JSON.stringify(ventes));
-
-      alert("Facture imprimée / sauvegardée.");
-      factureItems = [];
-      renderFacture();
-    }
-
-    function renderSales() {
-      const ventes = JSON.parse(localStorage.getItem("ventes") || "[]");
-      const container = document.getElementById("salesSummary");
-      container.innerHTML = ventes.map(v => `
-        <div style='border-bottom:1px solid #ccc; padding:5px 0;'>
-          <div><strong>${v.client}</strong> - ${v.total} DA (${v.paiement})</div>
-          <small>${v.date} - ${v.adresse}</small>
-        </div>
-      `).join("");
-    }
-
-    function scanCode(targetInputId) {
-      const qrReader = document.getElementById("qr-reader");
-      qrReader.style.display = "block";
-      html5QrCode = new Html5Qrcode("qr-reader");
-
-      Html5Qrcode.getCameras().then(devices => {
-        let backCamera = devices.find(device => device.label.toLowerCase().includes("back"));
-        if (!backCamera && devices.length > 1) {
-          backCamera = devices[1]; // fallback to second camera
-        } else if (!backCamera) {
-          backCamera = devices[0];
-        }
-
-        if (backCamera) {
-          html5QrCode.start(
-            backCamera.id,
-            {
-              fps: 10,
-              qrbox: 250
-            },
+          await new Promise(res => setTimeout(res, 300)); // Delay fix
+          await html5QrCode.start(
+            { deviceId: { exact: backCamera.id } },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
             qrCodeMessage => {
-              document.getElementById(targetInputId).value = qrCodeMessage;
-              html5QrCode.stop();
-              qrReader.style.display = "none";
-            },
-            errorMessage => {
-              // ignore scanning errors
+              document.getElementById("barcodeInput").value = qrCodeMessage;
+              html5QrCode.stop().then(() => html5QrCode.clear());
             }
           );
         } else {
-          alert("Aucune caméra disponible.");
+          status.textContent = "Aucune caméra trouvée.";
         }
-      }).catch(err => alert("Erreur caméra: " + err));
+      } catch (err) {
+        status.textContent = "Erreur caméra: " + err;
+      }
+    }
+
+    function addProduct() {
+      const code = document.getElementById("barcodeInput").value;
+      const name = document.getElementById("productName").value;
+      const color = document.getElementById("productColor").value;
+      const price = document.getElementById("productPrice").value;
+      if (code && name && price) {
+        localStorage.setItem(`product-${code}`, JSON.stringify({ name, color, price }));
+        alert("Produit ajouté avec succès !");
+      } else {
+        alert("Veuillez remplir tous les champs.");
+      }
     }
   </script></body>
 </html>
